@@ -3,51 +3,46 @@ name: Cross-Compile Windows ARM64
 on:
   push:
     branches: [ main ]
-  # 允许手动从 GitHub Actions 界面触发编译
   workflow_dispatch:
 
 jobs:
   build:
-    # 使用官方 Windows x64 Runner (Host)
     runs-on: windows-latest
     
     steps:
-    - name: Checkout Code and Submodules
+    - name: Checkout Code
       uses: actions/checkout@v4
       with:
-        submodules: true # 确保下载所有 ThirdParty 源码
-
-    - name: Setup Vcpkg and Install Dependencies
+        submodules: true # 确保下载所有依赖源码
+        
+    - name: Setup Vcpkg
       uses: lukka/run-vcpkg@v11
       with:
-        # --- 核心修复：指定一个稳定的 Vcpkg 提交 ID ---
-        vcpkgCommitId: a02ce627e3831d1d6ac32af6d525492d2454a856
-        # ----------------------------------------------------
-        # 安装 Qt6Core, OpenSSL, Boost::Regex, ZLIB 等核心依赖
+        # 这一步将自动为 arm64-windows 交叉编译 Qt 和 Boost 等依赖
+       
         vcpkgArguments: qtbase openssl-static boost-regex zlib
-        # 指定交叉编译目标为 ARM64 Windows
         vcpkgTriplet: arm64-windows
-        vcpkgCache: true # 缓存依赖项，加速后续构建
+        # 缓存配置：加速后续编译 (首次运行会忽略缓存)
+        vcpkgCache: true
 
-    - name: Configure CMake for ARM64
-      # 使用 Vcpkg toolchain 进行配置
+    - name: Configure CMake
       run: |
         cmake -G "Ninja" -B build -S . `
           -DCMAKE_BUILD_TYPE=Release `
           -DVCPKG_TARGET_TRIPLET=arm64-windows `
           -DTDESKTOP_API_ID=23316314 `
           -DTDESKTOP_API_HASH=0fc6b9958356f1e37bbbe3bef200f4d6 `
-          -DDESKTOP_APP_DISABLE_SPELLCHECK=ON 
+          -DDESKTOP_APP_DISABLE_SPELLCHECK=ON
       env:
         VCPKG_ROOT: ${{ env.VCPKG_INSTALLATION_ROOT }}
 
     - name: Build Project
-      # 编译整个项目 (使用 4 线程并行编译)
+      # 使用 4 个核心并行编译 (Ninja)
       run: cmake --build build --config Release --target all --parallel 4
       
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: ayugram-windows-arm64
-        # 最终可执行文件路径
+        # 假设最终可执行文件在 build/Release 或 build/Debug 中
         path: build/Release/*.exe
